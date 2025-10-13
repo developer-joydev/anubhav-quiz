@@ -1,103 +1,268 @@
-import Image from "next/image";
+"use client";
+import { useEffect, useState } from "react";
 
-export default function Home() {
-  return (
-    <div className="font-sans grid grid-rows-[20px_1fr_20px] items-center justify-items-center min-h-screen p-8 pb-20 gap-16 sm:p-20">
-      <main className="flex flex-col gap-[32px] row-start-2 items-center sm:items-start">
-        <Image
-          className="dark:invert"
-          src="/next.svg"
-          alt="Next.js logo"
-          width={180}
-          height={38}
-          priority
-        />
-        <ol className="font-mono list-inside list-decimal text-sm/6 text-center sm:text-left">
-          <li className="mb-2 tracking-[-.01em]">
-            Get started by editing{" "}
-            <code className="bg-black/[.05] dark:bg-white/[.06] font-mono font-semibold px-1 py-0.5 rounded">
-              src/app/page.js
-            </code>
-            .
-          </li>
-          <li className="tracking-[-.01em]">
-            Save and see your changes instantly.
-          </li>
-        </ol>
+export default function MCQQuiz() {
+  const [questions, setQuestions] = useState([]);
+  const [currentQuestionIndex, setCurrentQuestionIndex] = useState(0);
+  const [userAnswers, setUserAnswers] = useState({});
+  const [isLoading, setIsLoading] = useState(true);
+  const [isSubmitted, setIsSubmitted] = useState(false);
 
-        <div className="flex gap-4 items-center flex-col sm:flex-row">
-          <a
-            className="rounded-full border border-solid border-transparent transition-colors flex items-center justify-center bg-foreground text-background gap-2 hover:bg-[#383838] dark:hover:bg-[#ccc] font-medium text-sm sm:text-base h-10 sm:h-12 px-4 sm:px-5 sm:w-auto"
-            href="https://vercel.com/new?utm_source=create-next-app&utm_medium=appdir-template-tw&utm_campaign=create-next-app"
-            target="_blank"
-            rel="noopener noreferrer"
-          >
-            <Image
-              className="dark:invert"
-              src="/vercel.svg"
-              alt="Vercel logomark"
-              width={20}
-              height={20}
-            />
-            Deploy now
-          </a>
-          <a
-            className="rounded-full border border-solid border-black/[.08] dark:border-white/[.145] transition-colors flex items-center justify-center hover:bg-[#f2f2f2] dark:hover:bg-[#1a1a1a] hover:border-transparent font-medium text-sm sm:text-base h-10 sm:h-12 px-4 sm:px-5 w-full sm:w-auto md:w-[158px]"
-            href="https://nextjs.org/docs?utm_source=create-next-app&utm_medium=appdir-template-tw&utm_campaign=create-next-app"
-            target="_blank"
-            rel="noopener noreferrer"
-          >
-            Read our docs
-          </a>
+  useEffect(() => {
+    loadQuestions();
+  }, []);
+
+  const loadQuestions = async () => {
+    try {
+      const response = await fetch("/api/questions");
+      const data = await response.json();
+      setQuestions(data);
+
+      // Initialize user answers
+      const initialAnswers = {};
+      data.forEach((question, index) => {
+        initialAnswers[index] = "";
+      });
+      setUserAnswers(initialAnswers);
+    } catch (error) {
+      console.error("Error loading questions:", error);
+    } finally {
+      setIsLoading(false);
+    }
+  };
+
+  const handleAnswerSelect = (answer) => {
+    setUserAnswers((prev) => ({
+      ...prev,
+      [currentQuestionIndex]: answer,
+    }));
+  };
+
+  const handleNext = () => {
+    if (currentQuestionIndex < questions.length - 1) {
+      setCurrentQuestionIndex((prev) => prev + 1);
+    }
+  };
+
+  const handlePrevious = () => {
+    if (currentQuestionIndex > 0) {
+      setCurrentQuestionIndex((prev) => prev - 1);
+    }
+  };
+
+  // const handleSubmit = async () => {
+  //   try {
+  //     // Update questions with user answers
+  //     const updatedQuestions = questions.map((question, index) => ({
+  //       ...question,
+  //       UserAnswer: userAnswers[index] || "",
+  //     }));
+
+  //     const response = await fetch("/api/submit", {
+  //       method: "POST",
+  //       headers: {
+  //         "Content-Type": "application/json",
+  //       },
+  //       body: JSON.stringify(updatedQuestions),
+  //     });
+
+  //     if (response.ok) {
+  //       setIsSubmitted(true);
+  //       alert(
+  //         "Quiz submitted successfully! Check your downloads for the results file."
+  //       );
+  //     }
+  //   } catch (error) {
+  //     console.error("Error submitting quiz:", error);
+  //     alert("Error submitting quiz. Please try again.");
+  //   }
+  // };
+
+  const handleSubmit = async () => {
+    try {
+      // Update questions with user answers
+      const updatedQuestions = questions.map((question, index) => ({
+        ...question,
+        UserAnswer: userAnswers[index] || "Not answered",
+        Status:
+          userAnswers[index] === question.CorrectAnswer
+            ? "Correct"
+            : "Incorrect",
+      }));
+
+      // Dynamically import xlsx for client-side download
+      const XLSX = await import("xlsx");
+
+      // Create worksheet and workbook
+      const worksheet = XLSX.utils.json_to_sheet(updatedQuestions);
+      const workbook = XLSX.utils.book_new();
+      XLSX.utils.book_append_sheet(workbook, worksheet, "Quiz Results");
+
+      // Generate filename with timestamp
+      const timestamp = new Date()
+        .toISOString()
+        .slice(0, 19)
+        .replace(/[:.]/g, "-");
+      const filename = `mcq_results_${timestamp}.xlsx`;
+
+      // Download the file
+      XLSX.writeFile(workbook, filename);
+
+      setIsSubmitted(true);
+    } catch (error) {
+      console.error("Error submitting quiz:", error);
+      alert("Error submitting quiz: " + error.message);
+    }
+  };
+
+  if (isLoading) {
+    return (
+      <div className="min-h-screen flex items-center justify-center bg-gray-100">
+        <div className="text-xl">Loading questions...</div>
+      </div>
+    );
+  }
+
+  if (questions.length === 0) {
+    return (
+      <div className="min-h-screen flex items-center justify-center bg-gray-100">
+        <div className="text-xl text-red-600">
+          No questions found. Please check the Excel file.
         </div>
-      </main>
-      <footer className="row-start-3 flex gap-[24px] flex-wrap items-center justify-center">
-        <a
-          className="flex items-center gap-2 hover:underline hover:underline-offset-4"
-          href="https://nextjs.org/learn?utm_source=create-next-app&utm_medium=appdir-template-tw&utm_campaign=create-next-app"
-          target="_blank"
-          rel="noopener noreferrer"
-        >
-          <Image
-            aria-hidden
-            src="/file.svg"
-            alt="File icon"
-            width={16}
-            height={16}
-          />
-          Learn
-        </a>
-        <a
-          className="flex items-center gap-2 hover:underline hover:underline-offset-4"
-          href="https://vercel.com/templates?framework=next.js&utm_source=create-next-app&utm_medium=appdir-template-tw&utm_campaign=create-next-app"
-          target="_blank"
-          rel="noopener noreferrer"
-        >
-          <Image
-            aria-hidden
-            src="/window.svg"
-            alt="Window icon"
-            width={16}
-            height={16}
-          />
-          Examples
-        </a>
-        <a
-          className="flex items-center gap-2 hover:underline hover:underline-offset-4"
-          href="https://nextjs.org?utm_source=create-next-app&utm_medium=appdir-template-tw&utm_campaign=create-next-app"
-          target="_blank"
-          rel="noopener noreferrer"
-        >
-          <Image
-            aria-hidden
-            src="/globe.svg"
-            alt="Globe icon"
-            width={16}
-            height={16}
-          />
-          Go to nextjs.org →
-        </a>
-      </footer>
+      </div>
+    );
+  }
+
+  if (isSubmitted) {
+    return (
+      <div className="min-h-screen flex items-center justify-center bg-gray-100">
+        <div className="bg-white p-8 rounded-lg shadow-md text-center">
+          <h2 className="text-2xl font-bold text-green-600 mb-4">
+            Quiz Submitted Successfully!
+          </h2>
+          <p className="text-gray-600">Thank you for completing the quiz.</p>
+          <p className="text-gray-600 mt-2">
+            Check your downloads for the results Excel file.
+          </p>
+        </div>
+      </div>
+    );
+  }
+
+  const currentQuestion = questions[currentQuestionIndex];
+  const currentAnswer = userAnswers[currentQuestionIndex];
+  const isLastQuestion = currentQuestionIndex === questions.length - 1;
+
+  return (
+    <div className="min-h-screen bg-gray-100 py-8">
+      <div className="max-w-2xl mx-auto bg-white rounded-lg shadow-md p-6">
+        {/* Progress Bar */}
+        <div className="mb-6">
+          <div className="flex justify-between items-center mb-2">
+            <span className="text-sm font-medium text-gray-700">
+              Question {currentQuestionIndex + 1} of {questions.length}
+            </span>
+            <span className="text-sm font-medium text-gray-700">
+              {Math.round(
+                ((currentQuestionIndex + 1) / questions.length) * 100
+              )}
+              %
+            </span>
+          </div>
+          <div className="w-full bg-gray-200 rounded-full h-2">
+            <div
+              className="bg-blue-600 h-2 rounded-full transition-all duration-300"
+              style={{
+                width: `${
+                  ((currentQuestionIndex + 1) / questions.length) * 100
+                }%`,
+              }}
+            ></div>
+          </div>
+        </div>
+
+        {/* Question */}
+        <div className="mb-6">
+          <h2 className="text-xl font-semibold text-gray-800 mb-4">
+            {currentQuestion.Question}
+          </h2>
+
+          {/* Options */}
+          <div className="space-y-3">
+            {["A", "B", "C", "D"].map((option) => (
+              <label
+                key={option}
+                className={`flex items-center p-3 border rounded-lg cursor-pointer transition-colors ${
+                  currentAnswer === option
+                    ? "bg-blue-50 border-blue-500"
+                    : "border-gray-300 hover:bg-gray-50"
+                }`}
+              >
+                <input
+                  type="radio"
+                  name="answer"
+                  value={option}
+                  checked={currentAnswer === option}
+                  onChange={() => handleAnswerSelect(option)}
+                  className="h-4 w-4 text-blue-600 focus:ring-blue-500"
+                />
+                <span className="ml-3 text-gray-700">
+                  {option}. {currentQuestion[`Option${option}`]}
+                </span>
+              </label>
+            ))}
+          </div>
+        </div>
+
+        {/* Navigation Buttons */}
+        <div className="flex justify-between items-center">
+          <button
+            onClick={handlePrevious}
+            disabled={currentQuestionIndex === 0}
+            className={`px-6 py-2 rounded-lg font-medium ${
+              currentQuestionIndex === 0
+                ? "bg-gray-300 text-gray-500 cursor-not-allowed"
+                : "bg-gray-600 text-white hover:bg-gray-700"
+            }`}
+          >
+            Previous
+          </button>
+
+          {!isLastQuestion ? (
+            <button
+              onClick={handleNext}
+              className="px-6 py-2 bg-blue-600 text-white rounded-lg font-medium hover:bg-blue-700"
+            >
+              Next
+            </button>
+          ) : (
+            <button
+              onClick={handleSubmit}
+              className="px-6 py-2 bg-green-600 text-white rounded-lg font-medium hover:bg-green-700"
+            >
+              Submit Quiz
+            </button>
+          )}
+        </div>
+
+        {/* Quick Navigation Dots */}
+        <div className="flex justify-center space-x-2 mt-6">
+          {questions.map((_, index) => (
+            <button
+              key={index}
+              onClick={() => setCurrentQuestionIndex(index)}
+              className={`w-3 h-3 rounded-full ${
+                index === currentQuestionIndex
+                  ? "bg-blue-600"
+                  : userAnswers[index]
+                  ? "bg-green-500"
+                  : "bg-gray-300"
+              }`}
+              title={`Question ${index + 1}`}
+            />
+          ))}
+        </div>
+      </div>
     </div>
   );
 }
