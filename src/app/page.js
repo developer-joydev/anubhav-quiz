@@ -90,25 +90,27 @@ export default function MCQQuiz() {
             : "Incorrect",
       }));
 
-      // Dynamically import xlsx for client-side download
-      const XLSX = await import("xlsx");
+      const response = await fetch("/api/submit", {
+        method: "POST",
+        headers: {
+          "Content-Type": "application/json",
+        },
+        body: JSON.stringify(updatedQuestions),
+      });
 
-      // Create worksheet and workbook
-      const worksheet = XLSX.utils.json_to_sheet(updatedQuestions);
-      const workbook = XLSX.utils.book_new();
-      XLSX.utils.book_append_sheet(workbook, worksheet, "Quiz Results");
+      const result = await response.json();
 
-      // Generate filename with timestamp
-      const timestamp = new Date()
-        .toISOString()
-        .slice(0, 19)
-        .replace(/[:.]/g, "-");
-      const filename = `mcq_results_${timestamp}.xlsx`;
+      if (response.ok && result.success) {
+        console.log("✅ Results saved:", result.fileInfo);
+        setIsSubmitted(true);
 
-      // Download the file
-      XLSX.writeFile(workbook, filename);
-
-      setIsSubmitted(true);
+        // Show success message with file info
+        alert(
+          `Quiz submitted successfully!\n\nResults saved to: ${result.fileInfo.path}`
+        );
+      } else {
+        throw new Error(result.error || "Failed to submit quiz");
+      }
     } catch (error) {
       console.error("Error submitting quiz:", error);
       alert("Error submitting quiz: " + error.message);
@@ -136,14 +138,35 @@ export default function MCQQuiz() {
   if (isSubmitted) {
     return (
       <div className="min-h-screen flex items-center justify-center bg-gray-100">
-        <div className="bg-white p-8 rounded-lg shadow-md text-center">
+        <div className="bg-white p-8 rounded-lg shadow-md text-center max-w-md">
+          <div className="text-green-500 text-4xl mb-4">✅</div>
           <h2 className="text-2xl font-bold text-green-600 mb-4">
             Quiz Submitted Successfully!
           </h2>
-          <p className="text-gray-600">Thank you for completing the quiz.</p>
-          <p className="text-gray-600 mt-2">
-            Check your downloads for the results Excel file.
+          <p className="text-gray-600 mb-2">
+            Your results have been saved to the server.
           </p>
+          <p className="text-gray-600 mb-4">
+            You can find the results file in the{" "}
+            <code className="bg-gray-100 px-2 py-1 rounded">
+              public/results
+            </code>{" "}
+            folder.
+          </p>
+          <div className="flex space-x-4 justify-center">
+            <button
+              onClick={() => window.location.reload()}
+              className="px-6 py-2 bg-blue-600 text-white rounded-lg font-medium hover:bg-blue-700"
+            >
+              Take Quiz Again
+            </button>
+            <button
+              onClick={() => window.open("/results", "_blank")}
+              className="px-6 py-2 bg-green-600 text-white rounded-lg font-medium hover:bg-green-700"
+            >
+              View Results Folder
+            </button>
+          </div>
         </div>
       </div>
     );

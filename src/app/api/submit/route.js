@@ -1,21 +1,60 @@
-import { generateExcelBlob } from "@/lib/excelUtils";
+import { mkdir, writeFile } from "fs/promises";
 import { NextResponse } from "next/server";
+import path from "path";
+import * as XLSX from "xlsx";
 
 // export async function POST(request) {
 //   try {
 //     const questionsWithAnswers = await request.json();
 
-//     // Here you would typically save to a database
-//     // For now, we'll trigger a download of the updated Excel file
-//     writeExcelFile(questionsWithAnswers, "mcq_results.xlsx");
+//     console.log(
+//       "📥 Received submission with",
+//       questionsWithAnswers.length,
+//       "questions"
+//     );
+
+//     // Create worksheet and workbook
+//     const worksheet = XLSX.utils.json_to_sheet(questionsWithAnswers);
+//     const workbook = XLSX.utils.book_new();
+//     XLSX.utils.book_append_sheet(workbook, worksheet, "Quiz Results");
+
+//     // Generate filename with timestamp
+//     const timestamp = new Date()
+//       .toISOString()
+//       .slice(0, 19)
+//       .replace(/[:.]/g, "-");
+//     const filename = `mcq_results_${timestamp}.xlsx`;
+
+//     // Ensure results directory exists
+//     const resultsDir = path.join(process.cwd(), "public", "results");
+//     try {
+//       await mkdir(resultsDir, { recursive: true });
+//     } catch (error) {
+//       // Directory might already exist, which is fine
+//       if (error.code !== "EEXIST") {
+//         throw error;
+//       }
+//     }
+
+//     // Save file to public/results directory
+//     const filePath = path.join(resultsDir, filename);
+//     XLSX.writeFile(workbook, filePath);
+
+//     console.log("✅ Results saved to:", filePath);
 
 //     return NextResponse.json({
 //       success: true,
 //       message: "Answers submitted successfully",
+//       fileInfo: {
+//         filename: filename,
+//         path: `/results/${filename}`,
+//         savedAt: new Date().toISOString(),
+//       },
 //     });
 //   } catch (error) {
+//     console.error("❌ Error in submit API:", error);
 //     return NextResponse.json(
-//       { error: "Failed to submit answers" },
+//       { error: "Failed to submit answers: " + error.message },
 //       { status: 500 }
 //     );
 //   }
@@ -31,25 +70,53 @@ export async function POST(request) {
       "questions"
     );
 
-    // Generate Excel blob
-    const excelBlob = generateExcelBlob(questionsWithAnswers);
+    // Create worksheet and workbook
+    const worksheet = XLSX.utils.json_to_sheet(questionsWithAnswers);
+    const workbook = XLSX.utils.book_new();
+    XLSX.utils.book_append_sheet(workbook, worksheet, "Quiz Results");
 
-    if (!excelBlob) {
-      throw new Error("Failed to generate Excel file");
+    // Generate filename with timestamp
+    const timestamp = new Date()
+      .toISOString()
+      .slice(0, 19)
+      .replace(/[:.]/g, "-");
+    const filename = `mcq_results_${timestamp}.xlsx`;
+
+    // Ensure results directory exists
+    const resultsDir = path.join(process.cwd(), "public", "results");
+    try {
+      await mkdir(resultsDir, { recursive: true });
+      console.log("✅ Results directory ensured:", resultsDir);
+    } catch (error) {
+      // Directory might already exist, which is fine
+      if (error.code !== "EEXIST") {
+        console.error("❌ Error creating directory:", error);
+        throw error;
+      }
     }
 
-    // Convert blob to base64 for sending in response
-    const buffer = await excelBlob.arrayBuffer();
-    const base64 = Buffer.from(buffer).toString("base64");
+    // Save file to public/results directory using Node.js file system
+    const filePath = path.join(resultsDir, filename);
+
+    // Use XLSX.write with buffer and then write to file system
+    const excelBuffer = XLSX.write(workbook, {
+      bookType: "xlsx",
+      type: "buffer",
+    });
+
+    // Write the buffer to file
+    await writeFile(filePath, excelBuffer);
+
+    console.log("✅ Results saved to:", filePath);
 
     return NextResponse.json({
       success: true,
       message: "Answers submitted successfully",
-      file: {
-        data: base64,
-        filename: `mcq_results_${Date.now()}.xlsx`,
-        mimeType:
-          "application/vnd.openxmlformats-officedocument.spreadsheetml.sheet",
+      fileInfo: {
+        filename: filename,
+        path: `/results/${filename}`,
+        savedAt: new Date().toISOString(),
+        fullPath: filePath,
       },
     });
   } catch (error) {
