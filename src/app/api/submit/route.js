@@ -63,6 +63,14 @@ import * as XLSX from "xlsx";
 export async function POST(request) {
   try {
     const questionsWithAnswers = await request.json();
+    const { searchParams } = new URL(request.url);
+    const subject = searchParams.get("subject") || "english";
+
+    console.log(
+      "🚀 API Route: Submitting answers for subject:",
+      request.url,
+      searchParams
+    );
 
     console.log(
       "📥 Received submission with",
@@ -80,7 +88,7 @@ export async function POST(request) {
       .toISOString()
       .slice(0, 19)
       .replace(/[:.]/g, "-");
-    const filename = `mcq_results_${timestamp}.xlsx`;
+    const filename = `results_${subject}_${timestamp}.xlsx`;
 
     // Ensure results directory exists
     const resultsDir = path.join(process.cwd(), "public", "results");
