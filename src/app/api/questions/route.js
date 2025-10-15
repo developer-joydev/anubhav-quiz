@@ -10,9 +10,7 @@ export async function GET(request) {
     console.log("🚀 API Route: Fetching questions for subject:", subject);
 
     // Try to read from subject-specific Excel file
-    const excelQuestions = await readExcelFile(
-      `http://localhost:3000/questions/${subject}.xlsx`
-    );
+    const excelQuestions = await readExcelFile(`/questions/${subject}.xlsx`);
 
     let questions;
     if (excelQuestions && excelQuestions.length > 0) {
