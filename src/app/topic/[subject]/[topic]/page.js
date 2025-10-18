@@ -1,15 +1,18 @@
 "use client";
-import { getSubjectById } from "@/lib/subjects";
+
+import Results from "@/components/results";
+import {
+  fetchQuestionsByTopic,
+  fetchSubjectById,
+  fetchTopicById,
+  submitAnswer,
+} from "@/lib/loadData";
 import { useParams, useRouter } from "next/navigation";
 import { useEffect, useState } from "react";
-import { ToastContainer, toast } from "react-toastify";
-import "react-toastify/dist/ReactToastify.css";
 
-export default function QuizPage() {
+const QuestionCard = () => {
   const params = useParams();
   const router = useRouter();
-  const subjectId = params.subject;
-
   const [questions, setQuestions] = useState([]);
   const [currentQuestionIndex, setCurrentQuestionIndex] = useState(0);
   const [userAnswers, setUserAnswers] = useState({});
@@ -17,51 +20,39 @@ export default function QuizPage() {
   const [isSubmitted, setIsSubmitted] = useState(false);
   const [error, setError] = useState("");
   const [showRequiredError, setShowRequiredError] = useState(false);
-
-  const subject = getSubjectById(subjectId);
+  const [subject, setSubject] = useState(null);
+  const [topic, setTopic] = useState(null);
+  const subjectId = params.subject;
+  const topicId = params.topic;
 
   useEffect(() => {
-    if (!subject) {
-      setError("Subject not found");
-      setIsLoading(false);
-      return;
-    }
     loadQuestions();
-  }, [subject]);
+  }, [subjectId, topicId]);
 
-  useEffect(() => {
-    isSubmitted && toast.success("Quiz submitted successfully!");
-  }, [isSubmitted]);
-
-  const notify = () => toast("Wow so easy!");
   const loadQuestions = async () => {
+    setIsLoading(true);
+    setError("");
     try {
-      setIsLoading(true);
-      setError("");
+      const subjectData = await fetchSubjectById(subjectId);
+      setSubject(subjectData);
 
-      const response = await fetch(`/api/questions?subject=${subjectId}`);
+      const topicData = await fetchTopicById(topicId);
+      setTopic(topicData);
 
-      if (!response.ok) {
-        throw new Error(`Failed to load questions: ${response.status}`);
-      }
-
-      const data = await response.json();
-
-      if (!data || data.length === 0) {
-        throw new Error("No questions available for this subject");
-      }
-
-      setQuestions(data);
+      const questionList = await fetchQuestionsByTopic(topicId);
+      // if (!questionList || questionList.length === 0) {
+      //   throw new Error("No questions available for this subject");
+      // }
+      setQuestions(questionList || []);
 
       // Initialize user answers
       const initialAnswers = {};
-      data.forEach((_, index) => {
+      questionList.forEach((_, index) => {
         initialAnswers[index] = "";
       });
       setUserAnswers(initialAnswers);
-    } catch (error) {
-      console.error("Error loading questions:", error);
-      setError(error.message);
+    } catch (err) {
+      setError("Failed to load questions. Please try again later.");
       setQuestions([]);
     } finally {
       setIsLoading(false);
@@ -144,39 +135,31 @@ export default function QuizPage() {
 
     try {
       // Update questions with user answers and status
-      const updatedQuestions = questions.map((question, index) => ({
-        ...question,
-        UserAnswer: userAnswers[index] || "Not answered",
-        Status:
-          userAnswers[index] === question.CorrectAnswer
-            ? "Correct"
-            : "Incorrect",
-        Subject: subject.name,
+      // const updatedQuestions = questions.map((question, index) => ({
+      //   ...question,
+      //   UserAnswer: userAnswers[index] || "Not answered",
+      //   Status:
+      //     userAnswers[index] === question.CorrectAnswer
+      //       ? "Correct"
+      //       : "Incorrect",
+      //   Subject: subject.name,
+      // }));
+
+      const answers = questions.map((question, index) => ({
+        questionId: question._id,
+        userAnswer: userAnswers[index],
       }));
 
-      const response = await fetch(`/api/submit?subject=${subjectId}`, {
-        method: "POST",
-        headers: {
-          "Content-Type": "application/json",
-        },
-        body: JSON.stringify(updatedQuestions),
-      });
-
-      const result = await response.json();
-
-      if (response.ok && result.success) {
-        console.log("✅ Results saved:", result.fileInfo);
+      // Submit answers
+      const answerSubmitted = await submitAnswer({ answers });
+      if (answerSubmitted) {
         setIsSubmitted(true);
-
-        // alert(
-        //   `Quiz submitted successfully!\n\nResults saved to: ${result.fileInfo.path}`
-        // );
       } else {
         throw new Error(result.error || "Failed to submit quiz");
       }
     } catch (error) {
       console.error("Error submitting quiz:", error);
-      alert("Error submitting quiz: " + error.message);
+      alert("Error submitting quiz: UI" + error.message);
     }
   };
 
@@ -187,27 +170,9 @@ export default function QuizPage() {
   const totalQuestions = questions.length;
   const isAllAnswered = answeredCount === totalQuestions;
 
-  // Redirect if subject not found
-  if (!subject) {
-    return (
-      <div className="min-h-screen flex items-center justify-center bg-gray-100">
-        <div className="bg-white p-8 rounded-lg shadow-md text-center">
-          <h2 className="text-2xl font-bold text-red-600 mb-4">
-            Subject Not Found
-          </h2>
-          <p className="text-gray-600 mb-4">
-            The requested subject does not exist.
-          </p>
-          <button
-            onClick={() => router.push("/")}
-            className="px-6 py-2 bg-blue-600 text-white rounded-lg font-medium hover:bg-blue-700"
-          >
-            Back to Home
-          </button>
-        </div>
-      </div>
-    );
-  }
+  const currentQuestion = questions[currentQuestionIndex] || {};
+  const currentAnswer = userAnswers[currentQuestionIndex];
+  const isLastQuestion = currentQuestionIndex === questions.length - 1;
 
   // Render loading state
   if (isLoading) {
@@ -216,7 +181,7 @@ export default function QuizPage() {
         <div className="text-center">
           <div className="animate-spin rounded-full h-12 w-12 border-b-2 border-blue-600 mx-auto mb-4"></div>
           <div className="text-xl text-gray-600">
-            Loading {subject.name} questions...
+            Loading {subject?.name} questions...
           </div>
         </div>
       </div>
@@ -255,8 +220,15 @@ export default function QuizPage() {
   if (questions.length === 0) {
     return (
       <div className="min-h-screen flex items-center justify-center bg-gray-100">
-        <div className="text-xl text-red-600">
-          No questions available for {subject.name}.
+        <div className="text-xl text-red-600 w-full text-center">
+          No questions available for {topic?.title}.
+          <br />
+          <button
+            onClick={() => router.back()}
+            className="px-6 py-2 mt-5 bg-blue-600 text-white rounded-lg font-medium hover:bg-blue-700"
+          >
+            Back to Topic
+          </button>
         </div>
       </div>
     );
@@ -264,61 +236,20 @@ export default function QuizPage() {
 
   if (isSubmitted) {
     return (
-      <div className="min-h-screen flex items-center justify-center bg-gray-100">
-        <ToastContainer
-          position="top-right"
-          autoClose={5000}
-          hideProgressBar={false}
-          newestOnTop={false}
-          closeOnClick={false}
-          rtl={false}
-          pauseOnFocusLoss
-          draggable
-          pauseOnHover
-          theme="light"
-        />
-        <div className="bg-white p-8 rounded-lg shadow-md text-center max-w-md">
-          <div className="text-green-500 text-4xl mb-4">✅</div>
-          <h2 className="text-2xl font-bold text-green-600 mb-4">
-            Quiz Submitted Successfully!
-          </h2>
-          <p className="text-gray-600 mb-2">
-            Your {subject.name} quiz results have been saved.
-          </p>
-          <p className="text-gray-600 mb-4">
-            Check the{" "}
-            <code className="bg-gray-100 px-2 py-1 rounded">
-              public/results
-            </code>{" "}
-            folder.
-          </p>
-          <div className="flex space-x-4 justify-center">
-            <button
-              onClick={() => router.push("/")}
-              className="px-6 py-2 bg-blue-600 text-white rounded-lg font-medium hover:bg-blue-700"
-            >
-              Back to Home
-            </button>
-            <button
-              onClick={() => window.location.reload()}
-              className="px-6 py-2 bg-green-600 text-white rounded-lg font-medium hover:bg-green-700"
-            >
-              Retake Quiz
-            </button>
-          </div>
-        </div>
-      </div>
+      <Results onRestart={loadQuestions} topic={topic} questions={questions} />
     );
   }
 
-  const currentQuestion = questions[currentQuestionIndex];
-  const currentAnswer = userAnswers[currentQuestionIndex];
-  const isLastQuestion = currentQuestionIndex === questions.length - 1;
-
   return (
-    <div className="min-h-screen bg-gray-100 py-8 px-4">
+    <div
+      className="min-h-screen bg-gray-100 py-8 px-4"
+      style={{
+        fontFamily:
+          "'Noto Sans Bengali', 'SolaimanLipi', 'Arial Unicode MS', sans-serif",
+      }}
+    >
       <div className="max-w-4xl mx-auto">
-        <ToastContainer
+        {/* <ToastContainer
           position="top-right"
           autoClose={5000}
           hideProgressBar={false}
@@ -329,15 +260,15 @@ export default function QuizPage() {
           draggable
           pauseOnHover
           theme="light"
-        />
+        /> */}
         {/* Header */}
         <div className="bg-white rounded-lg shadow-md p-6 mb-6">
           <div className="flex flex-col md:flex-row md:items-center justify-between gap-4">
             <div>
               <h1 className="text-2xl font-bold text-gray-800">
-                {subject.name} Quiz
+                {topic?.title}
               </h1>
-              <p className="text-gray-600">{subject.description}</p>
+              <p className="text-gray-600">{topic?.description}</p>
             </div>
             <div className="flex flex-col sm:flex-row gap-4 text-center sm:text-right">
               <div>
@@ -408,10 +339,9 @@ export default function QuizPage() {
           {showRequiredError && (
             <div className="mb-4 p-4 bg-red-50 border border-red-200 rounded-lg">
               <div className="flex items-center">
-                <span className="text-red-500 text-lg mr-2">⚠️</span>
+                <span className="text-red-500 text-lg mr-2">🔴</span>
                 <span className="text-red-700 font-medium">
-                  This question is required. Please select an answer before
-                  proceeding.
+                  এই প্রশ্নের উত্তর তোমাকে দিতেই হবে। কোনো ফাঁকিবাজি চলবে না। 😆
                 </span>
               </div>
             </div>
@@ -420,14 +350,12 @@ export default function QuizPage() {
           {/* Question */}
           <div className="mb-6">
             <h2 className="text-xl font-semibold text-gray-800 mb-4">
-              {currentQuestion.Question}
+              {currentQuestion.question}
             </h2>
-
             {/* Options */}
             <div className="space-y-3">
-              {["A", "B", "C", "D"].map((option) => {
-                const optionText = currentQuestion[`Option${option}`];
-                return optionText ? (
+              {currentQuestion?.options.map((option) => {
+                return option ? (
                   <label
                     key={option}
                     className={`flex items-center p-4 border-2 rounded-lg cursor-pointer transition-all duration-200 ${
@@ -445,7 +373,7 @@ export default function QuizPage() {
                       className="h-5 w-5 text-blue-600 focus:ring-blue-500"
                     />
                     <span className="ml-3 text-gray-700 font-medium">
-                      {option}. {optionText}
+                      {option}
                     </span>
                   </label>
                 ) : null;
@@ -468,10 +396,10 @@ export default function QuizPage() {
                 Previous
               </button>
               <button
-                onClick={() => router.push("/")}
+                onClick={() => router.back()}
                 className="px-6 py-2 bg-gray-500 text-white rounded-lg font-medium hover:bg-gray-600"
               >
-                Back to Subjects
+                Back to Topics
               </button>
             </div>
 
@@ -515,7 +443,7 @@ export default function QuizPage() {
                   <button
                     key={index}
                     onClick={() => handleQuestionNavigation(index)}
-                    className={`w-5 h-5 rounded-full flex items-center justify-center text-sm font-medium transition-all duration-200 ${
+                    className={`w-3 h-3 rounded-full flex items-center justify-center text-sm font-sm transition-all duration-200 ${
                       isCurrent
                         ? "bg-blue-600 text-white ring-2 ring-blue-300"
                         : isAnswered
@@ -525,9 +453,7 @@ export default function QuizPage() {
                     title={`Question ${index + 1}${
                       isAnswered ? " (Answered)" : " (Not Answered)"
                     }`}
-                  >
-                    {index + 1}
-                  </button>
+                  />
                 );
               })}
             </div>
@@ -547,7 +473,7 @@ export default function QuizPage() {
         </div>
 
         {/* Quiz Instructions */}
-        <div className="mt-6 bg-blue-50 border border-blue-200 rounded-lg p-4">
+        {/* <div className="mt-6 bg-blue-50 border border-blue-200 rounded-lg p-4">
           <h3 className="font-semibold text-blue-800 mb-2">
             Quiz Instructions:
           </h3>
@@ -564,8 +490,10 @@ export default function QuizPage() {
               Submit button will be enabled only when all questions are answered
             </li>
           </ul>
-        </div>
+        </div> */}
       </div>
     </div>
   );
-}
+};
+
+export default QuestionCard;

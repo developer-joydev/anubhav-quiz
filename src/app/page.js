@@ -1,7 +1,17 @@
 "use client";
-import { subjects } from "@/lib/subjects";
+import { fetchSubjects } from "@/lib/loadData";
+import { useEffect, useState } from "react";
 
 export default function HomePage() {
+  const [subjects, setSubjects] = useState([]);
+  useEffect(() => {
+    const fetchData = async () => {
+      const subjectList = await fetchSubjects();
+      setSubjects(subjectList || []);
+    };
+    fetchData();
+  }, []);
+
   return (
     <div className="min-h-screen bg-gradient-to-br from-blue-50 to-indigo-100 py-8 px-4">
       <div className="max-w-6xl mx-auto">
@@ -45,10 +55,10 @@ export default function HomePage() {
         </div>
 
         {/* Subject Cards Grid */}
-        <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-4 gap-6">
+        <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-5 gap-4">
           {subjects.map((subject) => (
             <div
-              key={subject.id}
+              key={subject?._id}
               className="bg-white rounded-xl shadow-lg overflow-hidden hover:shadow-xl transition-all duration-300 transform hover:-translate-y-1"
             >
               {/* Subject Icon Header */}
@@ -76,10 +86,10 @@ export default function HomePage() {
 
                 {/* Start Quiz Button */}
                 <a
-                  href={`/quiz/${subject.id}`}
+                  href={`/topic/${subject._id}`}
                   className={`block w-full text-center py-3 px-4 bg-gradient-to-r ${subject.color} text-white font-semibold rounded-lg hover:opacity-90 transition-opacity`}
                 >
-                  Start Quiz
+                  Show Topics
                 </a>
               </div>
             </div>
@@ -124,7 +134,7 @@ export default function HomePage() {
 
         {/* Footer */}
         <div className="mt-24 text-center text-gray-500">
-          <p>©2025 Anubhav Tests. Test your knowledge, enhance your skills.</p>
+          <p>©2025 Unit Tests. Test your knowledge, enhance your skills.</p>
         </div>
       </div>
     </div>
