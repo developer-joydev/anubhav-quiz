@@ -1,4 +1,4 @@
-const SERVER_API_URL = process.env.SERVER_API_URL || "http://localhost:5000";
+const SERVER_API_URL = process.env.NEXT_PUBLIC_SERVER_API_URL;
 export const fetchSubjects = async () => {
   const res = await fetch(SERVER_API_URL + "/api/subjects");
   const subjectList = await res.json();
